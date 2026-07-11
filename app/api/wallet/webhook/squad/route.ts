@@ -19,14 +19,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Invalid JSON" }, { status: 400 });
   }
 
-  const { dedicated, dynamic, raw } = parseWebhookPayload(payload);
+  const parsed = parseWebhookPayload(payload);
   const supabase = getSupabaseServerClient();
 
-  const customerId = dedicated.customerIdentifier || dynamic.merchantReference;
-  const virtualAccountNumber = dedicated.virtualAccountNumber || dynamic.virtualAccountNumber;
+  const customerId = parsed.customerIdentifier;
+  const virtualAccountNumber = parsed.virtualAccountNumber;
 
   if (!customerId || !virtualAccountNumber) {
     return NextResponse.json({ message: "Missing identifiers" }, { status: 400 });
+  }
+
+  if (!parsed.isSuccess) {
+    return NextResponse.json({ message: "Transaction not successful" }, { status: 200 });
   }
 
   const { data: va } = await supabase
@@ -39,12 +43,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "Account not found" }, { status: 404 });
   }
 
-  const amount = dedicated.amount || dynamic.amount || Number(raw.amount || 0);
+  const amount = parsed.amount || Number(payload.amount || 0);
   if (amount <= 0) {
     return NextResponse.json({ message: "Invalid amount" }, { status: 400 });
   }
 
-  const reference = dedicated.reference || dynamic.reference || generateReference("squad");
+  const reference = parsed.reference || generateReference("squad");
 
   // Idempotency: check existing transaction by reference
   const { data: existing } = await supabase

@@ -1,4 +1,5 @@
 import axios from "axios";
+import { createHmac } from "crypto";
 import { getApiKey } from "@/lib/api-keys";
 import { logApiCall } from "@/lib/services/log";
 
@@ -57,25 +58,8 @@ export async function createVirtualAccount({
   userId: string;
   email: string;
 }) {
-  const bvn = process.env.SQUAD_BVN;
-  if (bvn) {
-    // B2B dedicated account (merchant BVN, no user-facing BVN collection)
-    return squadRequest({
-      method: "POST",
-      path: "/virtual-account/business",
-      data: {
-        customer_identifier: userId,
-        business_name: `Gigaplug ${email.split("@")[0]}`,
-        mobile_num: process.env.SQUAD_BVN_PHONE || "08000000000",
-        bvn,
-        beneficiary_account: process.env.SQUAD_BENEFICIARY_ACCOUNT || "",
-      },
-      userId,
-    });
-  }
-
-  // No-BVN fallback: create a dynamic virtual account in the merchant pool
-  // This is a best-effort fallback; the user should set SQUAD_BVN for a true dedicated account.
+  // No BVN/NIN is collected from the user. Squad's dynamic virtual account
+  // endpoint creates a virtual account number without BVN in the request.
   return squadRequest({
     method: "POST",
     path: "/virtual-account/create-dynamic-virtual-account",
@@ -91,29 +75,26 @@ export async function createVirtualAccount({
 export function verifyWebhookSignature(payload: string, signatureHeader: string) {
   const secret = process.env.SQUAD_SECRET_KEY || "";
   if (!secret || !signatureHeader) return false;
-  const crypto = require("crypto");
-  const computed = crypto.createHmac("sha512", secret).update(payload).digest("hex");
+  const computed = createHmac("sha512", secret).update(payload).digest("hex");
   return computed === signatureHeader;
 }
 
 export function parseWebhookPayload(payload: any) {
-  // Dedicated virtual account (B2B/B2C) webhook shape
-  const dedicated = {
-    virtualAccountNumber: payload.virtual_account_number,
-    customerIdentifier: payload.customer_identifier,
-    amount: Number(payload.principal_amount || payload.amount || 0),
-    reference: payload.transaction_reference,
-    status: payload.transaction_status,
-  };
+  const virtualAccountNumber = payload.virtual_account_number;
+  const customerIdentifier = payload.customer_identifier;
+  const amount = Number(payload.principal_amount || payload.amount_received || payload.amount || 0);
+  const reference = payload.transaction_reference;
 
-  // Dynamic virtual account webhook shape
-  const dynamic = {
-    virtualAccountNumber: payload.virtual_account_number,
-    merchantReference: payload.merchant_reference,
-    amount: Number(payload.amount_received || payload.merchant_amount || 0),
-    reference: payload.transaction_reference,
-    status: payload.transaction_status,
-  };
+  const status = (payload.transaction_status || payload.status || "").toString().toLowerCase();
+  const isSuccess = status === "success" || status === "successful" || status === "approved";
 
-  return { dedicated, dynamic, raw: payload };
+  return {
+    virtualAccountNumber,
+    customerIdentifier,
+    amount,
+    reference,
+    status,
+    isSuccess,
+    raw: payload,
+  };
 }

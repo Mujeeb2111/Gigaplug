@@ -6,7 +6,7 @@ A mobile-first web app for buying mobile data/airtime and renting OTP verificati
 
 - Passwordless email-OTP login (via Brevo)
 - Unified login for users and one hardcoded admin
-- Squad virtual accounts + webhook wallet funding
+- Squad virtual accounts + webhook wallet funding (no BVN/NIN collected from users)
 - 5sim OTP number store with dynamic pricing and profit rules
 - ClubKonnect data bundle and airtime sales
 - Admin dashboard for price tiers, users, data plans, OTP rules, API keys, wallet adjustments, and API logs
@@ -34,6 +34,6 @@ Configure the same environment variables on your hosting platform.
 
 ## Important Notes
 
-- **Squad virtual accounts**: A true dedicated account per user requires the merchant `SQUAD_BVN`, `SQUAD_BVN_PHONE`, and `SQUAD_BENEFICIARY_ACCOUNT`. If you do not set these, the app falls back to a dynamic virtual account. These are merchant credentials, not user-facing fields.
+- **No BVN/NIN collection**: Users never enter a BVN or NIN. Squad virtual accounts are created through the dynamic virtual account endpoint, which does not require BVN in the request.
 - **API keys**: You can set API keys via environment variables or add/override them from the admin dashboard (stored in `api_keys` table).
 - **OTP pricing**: Admin configures price tiers and country profit rules. The backend queries 5sim live and only sells numbers that satisfy the profit rule.
